@@ -20,7 +20,7 @@ procTemp = pp.preprocessor()
 procTemp.data.append(proc.data[0].copy())
 procTemp.drop(conditionString="df[\"Batter\"] != \"Jose Altuve\"")
 
-procTemp.drop(["Batter","Date_1", "Date_2", "Pitcher","Weather","Class"], axis=1)
+procTemp.drop(["Batter","Date_1", "Pitcher","Weather","Class"], axis=1)
 
 dropCol = []
 for col in procTemp.data[0].columns:
@@ -40,6 +40,6 @@ procTemp.normalizeColumns()
 
 data, labels = procTemp.getDataAndLabels()
 
-NN.restoreTF('models/Jose_Altuve', data, labels)
+print(NN.restoreTF('models/Jose_Altuve', data, labels))
 
 #print(NN.test(data, labels))

@@ -8,19 +8,18 @@ import FeedForwardNeuralNetwork as FFNN
 import time
 
 
-'''
-SETNAME = "output_2010-2017.csv"
+
+#SETNAME = "output_2010-2017.csv"
+SETNAME = "output_2010-2018.csv"
+TRAINNAME = "output_2010-2018_train.csv"
+TESTNAME = "output_2010-2018_test.csv"
 
 proc = pp.preprocessor()
+years = ["2010","2011","2012","2013","2014","2015","2016","2017","2018"]
 
-proc.load(datafile="data/output_2010.csv")
-proc.load(datafile="data/output_2011.csv")
-proc.load(datafile="data/output_2012.csv")
-proc.load(datafile="data/output_2013.csv")
-proc.load(datafile="data/output_2014.csv")
-proc.load(datafile="data/output_2015.csv")
-proc.load(datafile="data/output_2016.csv")
-proc.load(datafile="data/output_2017.csv")
+for year in years:
+    proc.load(datafile="data/output_" + year + ".csv")
+
 proc.merge(trust=True)
 
 #########################################################
@@ -60,180 +59,39 @@ proc.drop(conditionString="df[\"IP\"] < 10")
 
 #Drop NAs
 proc.data[0] = proc.data[0].dropna(axis=0, how='any')
-proc.data[0].to_csv("processedData/"+SETNAME)
-'''
 
 
-##################################################
-##################################################
-####      Test Restore Predict Models         ####
-##################################################
-##################################################
-SETNAME = "output_2010-2017.csv"
-proc = pp.preprocessor()
-proc.load(datafile="processedData/" + SETNAME)
-
-NN = FFNN.FFNN()
-NN.restoreTF('models/David_Dahl')
-
-procTemp = pp.preprocessor()
-procTemp.data.append(proc.data[0].copy())
-procTemp.drop(conditionString="df[\"Batter\"] != \"David Dahl\"")
-
-procTemp.drop(["Batter","Date_1", "Date_2", "Pitcher","Weather","Class"], axis=1)
-
-dropCol = []
-for col in procTemp.data[0].columns:
-    if "Unnamed" in col:
-        dropCol.append(col)
-
-if (len(dropCol) > 0):
-    procTemp.drop(dropCol, axis=1)
-
-procTemp.makeNumeric(classThreshold=8)
-procTemp.makeOutput("Label")
-#procTemp.equalizeSubsets()
-procTemp.normalizeColumns()
-
-data, labels = procTemp.getDataAndLabels()
-print(NN.test(data, labels))
+#Split into train and test sets
+#train set will be used to train base AND ensemble models
+#test will be final outcome test
 
 
-'''
-##################################################
-##################################################
-####      Create Batter Models on Data        ####
-##################################################
-##################################################
-SETNAME = "output_2010-2017.csv"
-proc = pp.preprocessor()
-proc.load(datafile="processedData/" + SETNAME)
-
-batterFile = open("data/2018_Batters_All.txt","r")
-batterRead = batterFile.readlines()
-
-modelAccuracyFile = open("models/ACCURACY.txt","a")
-modelAccuracyFile.close()
-
-
-for batterLine in batterRead:
+dfsTrain = []
+dfsTest = []
+for year in years:
     procTemp = pp.preprocessor()
     procTemp.data.append(proc.data[0].copy())
-    procTemp.drop(conditionString="df[\"Batter\"] != \"" + batterLine[:-2] + "\"")
-
-    if (len(procTemp.data[0]) < 10):
-        continue
-
-    procTemp.drop(["Batter","Date_1", "Date_2", "Pitcher","Weather","Class"], axis=1)
-    #Optional
-    #proc.drop(["BA_LG","HPP_LG", "CPAB_LG", "CPP_LG", "BA_LG_PP","HPP_LG_PP", "CPAB_LG_PP", "CPP_LG_PP"], axis=1)
-
-    #print(procTemp.data[0])
-    procTemp.makeNumeric(classThreshold=8)
-    procTemp.makeOutput("Label")
-    procTemp.equalizeSubsets()
-    procTemp.normalizeColumns()
-
-    #proc.drop(conditionString="df[\"Date\"] < 0.5")
+    procTemp.drop(conditionString="df[\"Date_2\"].astype('int64') != " + year)
     procTemp.shuffle()
-    data, labels = procTemp.getDataAndLabels()
-    #print(labels)
-    #time.sleep(15)
-    #proc.showFiles()
+    dfTrain = procTemp.data[0].head(n=(round((len(procTemp.data[0])/8)*7)))
+    print(len(dfTrain))
+    dfTest = procTemp.data[0][len(dfTrain)+1:]
+    print(len(dfTest))
 
+    dfsTrain.append(dfTrain)
+    dfsTest.append(dfTest)
 
-    # Test 1
-    model = [35, 24, 24, 2]
-    #model = [27, 24, 24, 2]
-    #dataFile = pd.read_csv("/media/storage/Projects/PreviousPycharmProjects/BaseballGuesser/data/output_2017.csv")
-    #data = dataFile.drop(dataFile.columns[len(dataFile.columns)-(model[-1]):len(dataFile.columns)], axis=1)
-    #labels = dataFile[dataFile.columns[len(dataFile.columns)-(model[-1]):len(dataFile.columns)]]
+proc.data = []
+procTest = pp.preprocessor()
 
-    #print(data[0:100])
-    #print(labels[0:100])
-    NN = FFNN.FFNN(data, labels, model)
-    #keep_input=1, keep_hidden=1)
+for year in range(len(dfsTrain)):
+    proc.data.append(dfsTrain[year])
+    procTest.data.append(dfsTest[year])
 
-    print("========================================================")
-    print("========================================================")
-    print("========== Batter: " + batterLine[:-2] + "  ============")
-    print("========================================================")
-    print("========================================================")
-    print(batterLine + ": " + str(len(proc.data[0])))
+proc.merge(trust=True)
+procTest.merge(trust=True)
+print(len(proc.data[0]))
+print(len(procTest.data[0]))
 
-    fileName = "models/" + batterLine[:-2].replace(" ","_")
-
-    accuracy = NN.train(10000, printFreq=100, fName=fileName, save=True)
-    #print(NN.train(printFreq=100, crossVal=10)
-    modelAccuracyFile = open("models/ACCURACY.txt","a")
-    modelAccuracyFile.write(fileName + ":" + str(accuracy) + "\r\n")
-    modelAccuracyFile.close()
-
-'''
-
-'''
-##################################################
-##################################################
-####     Create Pitcher Models on Data        ####
-##################################################
-##################################################
-
-pitcherFile = open("data/2018_Pitchers_All.txt","r")
-pitcherRead = pitcherFile.readlines()
-
-modelAccuracyFile = open("models/ACCURACY.txt","a")
-modelAccuracyFile.close()
-
-for pitcherLine in pitcherRead:
-    procTemp = pp.preprocessor()
-    procTemp.data.append(proc.data[0].copy())
-    procTemp.drop(conditionString="df[\"Pitcher\"] != \"" + pitcherLine[:-1] + "\"")
-
-    if (len(procTemp.data[0]) < 10):
-        print("No data")
-        continue
-
-    procTemp.drop(["Batter","Date_1", "Date_2", "Pitcher","Weather","Class"], axis=1)
-    #Optional
-    #proc.drop(["BA_LG","HPP_LG", "CPAB_LG", "CPP_LG", "BA_LG_PP","HPP_LG_PP", "CPAB_LG_PP", "CPP_LG_PP"], axis=1)
-
-    #print(procTemp.data[0])
-    procTemp.makeNumeric(classThreshold=8)
-    procTemp.makeOutput("Label")
-    procTemp.normalizeColumns()
-
-    #proc.drop(conditionString="df[\"Date\"] < 0.5")
-    procTemp.shuffle()
-    data, labels = procTemp.getDataAndLabels()
-    #print(labels)
-    #time.sleep(15)
-    #proc.showFiles()
-
-
-    # Test 1
-    model = [35, 24, 24, 2]
-    #model = [27, 24, 24, 2]
-    #dataFile = pd.read_csv("/media/storage/Projects/PreviousPycharmProjects/BaseballGuesser/data/output_2017.csv")
-    #data = dataFile.drop(dataFile.columns[len(dataFile.columns)-(model[-1]):len(dataFile.columns)], axis=1)
-    #labels = dataFile[dataFile.columns[len(dataFile.columns)-(model[-1]):len(dataFile.columns)]]
-
-    #print(data[0:100])
-    #print(labels[0:100])
-    NN = FFNN.FFNN(data, labels, model)
-    #keep_input=1, keep_hidden=1)
-
-    print("========================================================")
-    print("========================================================")
-    print("========== Batter: " + pitcherLine[:-1] + "  ============")
-    print("========================================================")
-    print("========================================================")
-    print(pitcherLine + ": " + str(len(proc.data[0])))
-
-    fileName = "models/" + pitcherLine[:-1].replace(" ","_")
-
-    accuracy = NN.train(10000, printFreq=100, fName=fileName, save=True)
-    #print(NN.train(printFreq=100, crossVal=10)
-    modelAccuracyFile = open("models/ACCURACY.txt","a")
-    modelAccuracyFile.write(fileName + ":" + str(accuracy) + "\r\n")
-    modelAccuracyFile.close()
-'''
+proc.data[0].to_csv("processedData/"+TRAINNAME)
+procTest.data[0].to_csv("processedData/"+TESTNAME)
